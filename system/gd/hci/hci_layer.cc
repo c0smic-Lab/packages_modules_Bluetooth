@@ -257,14 +257,16 @@ struct HciLayer::impl {
       log::assert_that(command_complete_view.IsValid(),
                        "assert failed: command_complete_view.IsValid()");
       (*command_queue_.front().GetCallback<CommandCompleteView>())(command_complete_view);
-    } else if (waiting_for != WaitingFor::STATUS_OR_COMPLETE) {
-      log::assert_that((waiting_for == WaitingFor::STATUS) == is_status,
-                       "{} was not expecting {} event", OpCodeText(op_code), logging_id);
-
-      (*command_queue_.front().GetCallback<TResponse>())(std::move(response_view));
     } else {
-      (*command_queue_.front().GetCallback<CommandStatusOrCompleteView>())(
-              std::move(response_view));
+      if (command_queue_.front().waiting_for_status_ == is_status) {
+        (*command_queue_.front().GetCallback<TResponse>())(std::move(response_view));
+      } else {
+        CommandCompleteView command_complete_view = CommandCompleteView::Create(
+            EventView::Create(PacketView<kLittleEndian>(
+                std::make_shared<std::vector<uint8_t>>(std::vector<uint8_t>()))));
+        (*command_queue_.front().GetCallback<CommandCompleteView>())(
+            std::move(command_complete_view));
+      }
     }
 
 #ifdef TARGET_FLOSS
